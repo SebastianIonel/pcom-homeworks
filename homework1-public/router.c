@@ -43,11 +43,6 @@ struct route_table_entry* find_best_route(uint32_t ip_dest) {
 			}
     	}
 	}
-	// u_int8_t *ip_bytes = (u_int8_t *)&ip_dest;
-	// // fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-
-	// ip_bytes = (u_int8_t *) &rtable[0].prefix;
-	// // fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
 	return best;
 }
 
@@ -68,7 +63,7 @@ int main(int argc, char *argv[])
 	// Do not modify this line
 	init(argc - 2, argv + 2);
 
-
+	int rc;
 	// TODO route_table
 	
 	rtable = (struct route_table_entry *) malloc(MAX_ENTRIES * sizeof(struct route_table_entry));
@@ -76,31 +71,17 @@ int main(int argc, char *argv[])
 
 	rtable_len = read_rtable(argv[1], rtable);
 
-	// TEST RTABLE => OK
-	// for (int i = 0; i < 10; i ++) {
-	// uint8_t *ip_bytes = (uint8_t *) &rtable[i].prefix;
-	// 		// fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-	// 	ip_bytes = (uint8_t *) &rtable[i].next_hop;
-	//   	// fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-	// 	ip_bytes = (uint8_t *) &rtable[i].mask;
-	//   	// fprintf(stderr, "%d %d %d %d \n", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-	// }
-
-	// TODO arp_table
-
-	arp_table = (struct arp_table_entry *) malloc(MAX_ENTRIES * sizeof(struct arp_table_entry));
+	// initialize arp_table as empty
+	arp_table = (struct arp_table_entry *) malloc(MAX_ENTRIES_MAC * sizeof(struct arp_table_entry));
 	DIE(arp_table == NULL, "memory");
+	arp_table_len = 0;
 
-	arp_table_len = parse_arp_table("arp_table.txt", arp_table);
-
-	// TEST ARP => OK
-	// for (int i = 0; i < arp_table_len; i ++) {
-	// 	uint8_t *ip_bytes = (uint8_t *) &arp_table[i].ip;
-	//   	// fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-		// ip_bytes = (uint8_t *) &arp_table[i].mac;
-	  	// // fprintf(stderr, "%x %x %x %x %x %x\n", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3], ip_bytes[4], ip_bytes[5]);
-	// }
-
+	// initialize queue for waiting after arp
+	queue waiting_queue = queue_create();
+	
+	// allocate memory for mac address
+	uint8_t *mac_address = malloc(MAC_SIZE * sizeof(u_int8_t));
+	DIE(mac_address == NULL, "memory");
 
 	while (1) {
 
@@ -118,24 +99,23 @@ int main(int argc, char *argv[])
 
 		// USEFUL REMEBERS: ntohs() -> transform from little endian order to network order
 		// 					htons() -> transform from network order to little endian order
-		fprintf(stderr, "Packet recieved from: ");
+		// fprintf(stderr, "Packet recieved from: ");
 		// for (int i = 0; i < MAC_SIZE; i ++) {
-			// fprintf(stderr, "%x ", eth_hdr->ether_shost[i]);
+		// 	fprintf(stderr, "%x ", eth_hdr->ether_shost[i]);
 		// }
 		// fprintf(stderr, "for: ");
 		// for (int i = 0; i < MAC_SIZE; i ++) {
-			// fprintf(stderr, "%x ", eth_hdr->ether_dhost[i]);
+		// 	fprintf(stderr, "%x ", eth_hdr->ether_dhost[i]);
 		// }
 		// check lenght of packet??
 
 		// check destination
-		uint8_t *mac_address = malloc(MAC_SIZE * sizeof(u_int8_t));
 		get_interface_mac(interface, mac_address);
 
 		if (check_mac(mac_address, eth_hdr->ether_dhost) == 1) {
 			// check type
 			if (ntohs(eth_hdr->ether_type) == 0x0800) {
-				fprintf(stderr, "IPv4\n");
+				fprintf(stderr, "Recived IPv4\n");
 				// initialize IP header
 				struct iphdr *ip_hdr = (struct iphdr *)(buf + sizeof(struct ether_header)); 
 				
@@ -144,6 +124,7 @@ int main(int argc, char *argv[])
 				char *router_ip_char = get_interface_ip(interface);
 				uint32_t router_ip = 0;
 				int rc = inet_pton(AF_INET, router_ip_char, &router_ip);
+				DIE(rc < 0, "inet");
 				if (ip_hdr->daddr == router_ip) {
 					// ICMP PROTOCOL
 					// TODO
@@ -184,13 +165,66 @@ int main(int argc, char *argv[])
 				// get mac address from ip_dest
 				struct arp_table_entry *next_hop = get_mac_address(best_route->next_hop);
 				if (next_hop == NULL) {
-					// fprintf(stderr, "something bad happen\n");
+					
+					// ************************
+					fprintf(stderr, "SEND ARP REQUEST\n");
+					// create ARP
+					char * packet = malloc(sizeof(struct ether_header) + sizeof(struct arp_header));
+					DIE(packet == NULL, "memory");
+					struct ether_header *ether = (struct ether_header *)packet;
+					struct arp_header *arp = (struct arp_header *) (packet + sizeof(struct ether_header));
+
+					// set dhost to broadcast
+					// set target mac
+					for (int i = 0; i <MAC_SIZE; i ++) {
+						ether->ether_dhost[i] = 0xff;
+						arp->tha[i] = 0x00;
+					}
+
+					// set ether type to arp
+					ether->ether_type = ntohs(0x0806);
+
+					// initialize arp
+					arp->htype = ntohs(0x01); 
+					arp->ptype = ntohs(0x0800); 
+					arp->hlen = 0x06;
+					arp->plen = 0x04;
+					arp->op = ntohs(0x01);
+
+					// update mac router and ip router
+					// for correct interface
+					get_interface_mac(best_route->interface, mac_address);
+					char *router_ip_char = get_interface_ip(interface);
+					uint32_t router_ip = 0;
+					int rc = inet_pton(AF_INET, router_ip_char, &router_ip);
+					DIE(rc < 0, "inet");
+
+
+					// copy sender mac
+					// set shost to router mac					
+					memcpy(arp->sha, mac_address, sizeof(arp->sha));
+					memcpy(ether->ether_shost, mac_address,
+        	   			sizeof(ether->ether_shost));
+					
+					// set ip addresses
+					arp->spa = router_ip;
+					arp->tpa = best_route->next_hop;
+
+					// add packet to watining_queue
+					struct packet *current_packet = malloc(sizeof(struct packet));
+					current_packet->len = len;
+					current_packet->buf = malloc(len);
+					memcpy(current_packet->buf, buf, len);
+					queue_enq(waiting_queue, (void *) current_packet);
+					
 					// send ARP
+					send_to_link(best_route->interface, packet, sizeof(struct ether_header) + sizeof(struct arp_header));
+					
+					// free memory
+					free(packet);
+					continue;
+					// *******************
 				}
-				// uint8_t *ip_bytes = (uint8_t *) &next_hop->ip;
-				// // fprintf(stderr, "%d %d %d %d -- ", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
-				// ip_bytes = (uint8_t *) next_hop->mac;
-			  	// // fprintf(stderr, "%x %x %x %x %x %x\n", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3], ip_bytes[4], ip_bytes[5]);
 
 				// rewrite L2 address
 				memcpy(eth_hdr->ether_dhost, next_hop->mac,
@@ -201,17 +235,103 @@ int main(int argc, char *argv[])
 				}
 
 			} else if (ntohs(eth_hdr->ether_type) == 0x0806) {
-				// fprintf(stderr, "ARP\n");
+				fprintf(stderr, "ARP  ");
+				// initialize arp header
+				struct arp_header *arp_hdr = (struct arp_header*)(buf + sizeof(struct ether_header)); 
+				
+				// check command
+				if (htons(arp_hdr->op) == 0x01) {
+					// request
+					fprintf(stderr, "Recieved REQUEST\n");
+					// have to send back a reply
+					
+					// change op
+					arp_hdr->op = ntohs(0x02);
+					// get current router ip
+					char *router_ip_char = get_interface_ip(interface);
+					uint32_t router_ip = 0;
+					int rc = inet_pton(AF_INET, router_ip_char, &router_ip);
+					DIE(rc < 0, "inet");
+
+					// change target and source
+					memcpy(arp_hdr->tha, arp_hdr->sha,MAC_SIZE * sizeof(uint8_t));
+					memcpy(arp_hdr->sha, mac_address,MAC_SIZE * sizeof(uint8_t));
+					
+					arp_hdr->tpa = arp_hdr->spa;
+					arp_hdr->spa = router_ip;
+					
+					// change eth
+					memcpy(eth_hdr->ether_dhost, arp_hdr->tha,
+						sizeof(eth_hdr->ether_dhost));
+					memcpy(eth_hdr->ether_shost, mac_address,
+						sizeof(eth_hdr->ether_shost));
+				
+					// send packet
+					send_to_link(interface, buf, len);
+
+					
+				} else {
+					// reply
+					fprintf(stderr, "Recieved REPLY\n");	
+
+					// add to table
+					arp_table[arp_table_len].ip = arp_hdr->spa;
+					memcpy(arp_table[arp_table_len].mac, arp_hdr->sha, sizeof(arp_hdr->sha));
+					arp_table_len += 1;
+					// remove from queue and send packet
+					struct packet *current_packet = (struct packet *)queue_deq(waiting_queue);
+					struct ether_header *ether = (struct ether_header *)current_packet->buf;
+					struct iphdr *ip_hdr = (struct iphdr *)(current_packet->buf + sizeof(struct ether_header)); 
+					struct route_table_entry *best_route = find_best_route(ip_hdr->daddr);
+					struct arp_table_entry *next_hop = get_mac_address(best_route->next_hop);
+					
+					if (next_hop == NULL) {
+						fprintf(stderr, "something bad happen\n");
+						uint8_t *ip_bytes = (uint8_t *) &ip_hdr->saddr;
+						fprintf(stderr, "ip->sad: %d %d %d %d \n", ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]);
+						continue;
+					}	
+					// update mac router
+					get_interface_mac(best_route->interface, mac_address);
+					
+					// rewrite ether header addresses
+					memcpy(ether->ether_dhost, next_hop->mac,
+						sizeof(eth_hdr->ether_dhost));
+		    		memcpy(ether->ether_shost, mac_address,
+						sizeof(eth_hdr->ether_shost));
+					// send packet
+					send_to_link(best_route->interface, current_packet->buf, current_packet->len);
+					// free memory
+					free(current_packet->buf);
+					free(current_packet);
+					current_packet = NULL;
+				}
 			} else {
-				// fprintf(stderr, "UNKNOWN -- DROP PACKET\n");
+				fprintf(stderr, "UNKNOWN -- DROP PACKET\n");
 				continue;
 			}
 
 		} else {
-			// fprintf(stderr, "WRONG MAC -> DROP PACKET\n");
+			fprintf(stderr, "Recieved WRONG MAC -> DROP PACKET\n");
+			fprintf(stderr, "Packet recieved from: ");
+			for (int i = 0; i < MAC_SIZE; i ++) {
+				fprintf(stderr, "%x ", eth_hdr->ether_shost[i]);
+			}
+			fprintf(stderr, "for: ");
+			for (int i = 0; i < MAC_SIZE; i ++) {
+				fprintf(stderr, "%x ", eth_hdr->ether_dhost[i]);
+			}
+			fprintf(stderr, ". My mac is: ");
+			for (int i = 0; i < MAC_SIZE; i ++) {
+				fprintf(stderr, "%x ", mac_address[i]);
+			}
 			continue;
 		}
 
 	}
+	// free memory
+	free(mac_address);
+	free(arp_table);
+	free(rtable);
 }
 

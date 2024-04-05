@@ -12,8 +12,14 @@
 
 // ADD BY ME
 #define MAX_ENTRIES 100000
+#define MAX_ENTRIES_MAC 256 
 #define MAC_SIZE 6
 #define IP_SIZE 4
+
+struct packet {
+	char *buf;
+	size_t len;
+};
 
 /*
  * @brief Sends a packet on a specific interface.
