@@ -2,12 +2,12 @@ ARP  Recieved REQUEST
 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
+INTERFACE: 2
 ARP  Recieved REQUEST
 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
-Recived IPv4
-Recived IPv4
+INTERFACE: 1
 Recived IPv4
 Recived IPv4
 Recived IPv4
@@ -15,12 +15,15 @@ Recived IPv4
 Recived IPv4
 Recived IPv4
 ARP  Recieved REQUEST
+Recived IPv4
+Recived IPv4
 Recived IPv4
 Recived IPv4
 Recived IPv4
 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
+INTERFACE: 0
 ARP  Recieved REQUEST
 Recived IPv4
 Recived IPv4
@@ -35,7 +38,10 @@ Recived IPv4
 Recived IPv4
 Recived IPv4
 Recived IPv4
+TTL expired -- DROP
+INTERFACE: 1
 Recived IPv4
+INTERFACE: 1
 Recived IPv4
 Recived IPv4
 Recived IPv4

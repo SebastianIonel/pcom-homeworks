@@ -2,15 +2,18 @@ ARP  Recieved REQUEST
 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
+INTERFACE: 2
 ARP  Recieved REQUEST
 Recieved WRONG MAC -> DROP PACKET
 Packet recieved from: de fe c8 ed 1 3 for: de ad be ef 0 3 . My mac is: de fe c8 ed 1 3 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
+INTERFACE: 0
 Recived IPv4
 Recived IPv4
 SEND ARP REQUEST
 ARP  Recieved REPLY
+INTERFACE: 1
 Recived IPv4
 Recived IPv4
 Recived IPv4
