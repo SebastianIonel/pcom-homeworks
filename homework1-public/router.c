@@ -33,15 +33,25 @@ int check_mac(u_int8_t* my_address, u_int8_t* recieved_address) {
 }
 
 struct route_table_entry* find_best_route(uint32_t ip_dest) {
+	
 	struct route_table_entry *best = NULL;
-	for (int i = 0; i < rtable_len; i ++) {
-		if ((ip_dest & rtable[i].mask) == rtable[i].prefix) {
-      		if (best == NULL) {
-        	best = &rtable[i];
-			} else if (ntohl(best->mask) < ntohl(rtable[i].mask)) {
-				best = &rtable[i];
+
+	int left = 0, right = rtable_len - 1, mid;
+
+	while (left <= right) {
+		mid = left + (right - left) / 2;
+			
+		if (rtable[mid].prefix == (ip_dest & rtable[mid].mask)) {
+			best = &rtable[mid];
+			left = mid + 1;
+		} else {
+		
+			if (htonl(rtable[mid].prefix) < htonl(ip_dest)) {
+				left = mid + 1;
+			} else {
+				right = mid - 1;
 			}
-    	}
+		}
 	}
 	return best;
 }
@@ -55,6 +65,31 @@ struct arp_table_entry* get_mac_address(uint32_t next_hop) {
 	return NULL;
 }
 
+int compare(const void *a, const void *b) {
+	struct route_table_entry *t0 = (struct route_table_entry *)a;
+	struct route_table_entry *t1 = (struct route_table_entry *)b;
+	uint32_t prefix0 = ntohl(t0->prefix);
+	uint32_t prefix1 = ntohl(t1->prefix);
+	if (prefix0 < prefix1) {
+		return -1;
+	} else if (prefix0 == prefix1) {
+		uint32_t mask0 = ntohl(t0->mask);
+		uint32_t mask1 = ntohl(t1->mask);
+		if (mask0 < mask1) {
+			return -1;
+		} else {
+			if (mask0 == mask1) {
+				return 0;
+			} else {
+				return 1;
+			}
+		}
+	} else {
+		return 1;
+	}
+	
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -64,12 +99,15 @@ int main(int argc, char *argv[])
 	init(argc - 2, argv + 2);
 
 	int rc;
-	// TODO route_table
 	
 	rtable = (struct route_table_entry *) malloc(MAX_ENTRIES * sizeof(struct route_table_entry));
 	DIE(rtable == NULL, "memory");
 
 	rtable_len = read_rtable(argv[1], rtable);
+
+	
+	// sort rtable
+	qsort(rtable, rtable_len, sizeof(struct route_table_entry), compare);
 
 	// initialize arp_table as empty
 	arp_table = (struct arp_table_entry *) malloc(MAX_ENTRIES_MAC * sizeof(struct arp_table_entry));
@@ -97,17 +135,6 @@ int main(int argc, char *argv[])
 		host order. For example, ntohs(eth_hdr->ether_type). The oposite is needed when
 		sending a packet on the link, */
 
-		// USEFUL REMEBERS: ntohs() -> transform from little endian order to network order
-		// 					htons() -> transform from network order to little endian order
-		// fprintf(stderr, "Packet recieved from: ");
-		// for (int i = 0; i < MAC_SIZE; i ++) {
-		// 	fprintf(stderr, "%x ", eth_hdr->ether_shost[i]);
-		// }
-		// fprintf(stderr, "for: ");
-		// for (int i = 0; i < MAC_SIZE; i ++) {
-		// 	fprintf(stderr, "%x ", eth_hdr->ether_dhost[i]);
-		// }
-		// check lenght of packet??
 
 		// check destination
 		get_interface_mac(interface, mac_address);
@@ -358,6 +385,7 @@ int main(int argc, char *argv[])
 
 					// search route table
 					struct route_table_entry *best_route = find_best_route(ip_hdr->daddr);
+					
 					if (best_route == NULL) {
 						// fprintf(stderr, "PACKET DROP\n");
 						// send ICMP
