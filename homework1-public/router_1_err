@@ -1,0 +1,48 @@
+ARP  Recieved REQUEST
+Recived IPv4
+SEND ARP REQUEST
+ARP  Recieved REPLY
+INTERFACE: 2
+ARP  Recieved REQUEST
+Recieved WRONG MAC -> DROP PACKET
+Recived IPv4
+SEND ARP REQUEST
+ARP  Recieved REPLY
+INTERFACE: 0
+Recived IPv4
+Recived IPv4
+SEND ARP REQUEST
+ARP  Recieved REPLY
+INTERFACE: 1
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+ARP  Recieved REQUEST
+Recieved WRONG MAC -> DROP PACKET
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+Recived IPv4
+ARP  Recieved REQUEST
+Recieved WRONG MAC -> DROP PACKET
+[(lib/lib.c:92)]: "receive_from_link"
+Network is down
