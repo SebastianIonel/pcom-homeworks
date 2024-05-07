@@ -1,20 +1,4 @@
-#include <stdio.h>
-#include <stdlib.h> 
-#include <unistd.h> 
-#include <string.h> 
-#include <sys/types.h> 
-#include <sys/socket.h> 
-#include <arpa/inet.h> 
-#include <netinet/in.h> 
-#include <sys/poll.h>
-
-#ifndef TCP_NODELAY
-#define TCP_NODELAY 0x01
-#endif
-
-#define MAXREC 2500
-#define TYPE 50
-#define INIT_PDFS 500
+#include "protocol.h"
 
 int main(int argc, char* argv[]) {
     // Check if port number is provided
@@ -141,10 +125,28 @@ int main(int argc, char* argv[]) {
                 close(udp_socketfd); // Close socket and exit on error
                 return EXIT_FAILURE;
             }
+            struct tcp_message tcp_msg;
+            tcp_msg.start[0] = 35;
+            tcp_msg.start[1] = 35;
+            memcpy(tcp_msg.info.topic, buffer, 50);
+            tcp_msg.info.type = buffer[TYPE];
+            memcpy(tcp_msg.info.content, buffer + TYPE + 1, 1500);
+            memcpy(tcp_msg.info.ip_address, inet_ntoa(client_addr_udp.sin_addr), 16);
+            uint16_t aux_port = ntohs(client_addr_udp.sin_port);
+            sprintf(tcp_msg.info.port, "%hu", port);
+            tcp_msg.end[0] = 35;
+            tcp_msg.end[1] = 35;
+            
             // send message to tcp
-            // TODO
+            char *p = (char *)&tcp_msg;
             for (int i = 3; i < nfds; i ++) {
-                write(pfds[i].fd, buffer, 56);
+                int send = 0, remaining = sizeof(tcp_msg);
+                int current_send = 0;
+                while (remaining > 0) {
+                    current_send = write(pfds[i].fd, (p + send), remaining);
+                    remaining -= current_send;
+                    send += current_send;
+                }
             }
 
         }
@@ -152,7 +154,7 @@ int main(int argc, char* argv[]) {
             // handle new connection from tcp client
             // accept conenction
             printf("TCP\n");
-            connfd = accept(tcp_sockfd, (struct sock_addr *)&client_addr_tcp, &len_tcp);
+            connfd = accept(tcp_sockfd, (struct sockaddr *)&client_addr_tcp, (socklen_t *)&len_tcp);
             printf("accept\n");
             if (connfd < 0) {
                 fprintf(stderr, "accept failed\n");
