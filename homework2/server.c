@@ -7,6 +7,8 @@ int main(int argc, char* argv[]) {
         return EXIT_FAILURE;
     }
 	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
+    struct client_info *clients = malloc(INIT_PDFS * sizeof(struct client_info));
+    int clients_number = 0;
     char buffer[MAXREC];
     int rc = 0;
     // Cast the port
@@ -106,9 +108,14 @@ int main(int argc, char* argv[]) {
             char command[5];
             fgets(command, 4, stdin);
             if (strncmp("exit", command, 4) == 0) { 
-                printf("Server Exit...\n"); 
+                // printf("Server Exit...\n"); 
                 // TODO: close tcp clients
-                break;
+                for (int i = 3; i < nfds; i ++) {
+                    close(pfds[i].fd);
+                }
+                close(tcp_sockfd);
+                close(udp_socketfd);
+                return EXIT_SUCCESS;
             } else {
                 printf("Invalid command\n");
             }
@@ -116,7 +123,7 @@ int main(int argc, char* argv[]) {
         else if((pfds[1].revents & POLLIN) != 0) {
             // handle recv message from udp
             // clear buffer
-            printf("UDP\n");
+            // printf("UDP\n");
             bzero(buffer, MAXREC);
             // get message from udp clients
             int rec = recvfrom(udp_socketfd, buffer, MAXREC, 0, (struct sockaddr *)&client_addr_udp, &len_udp);
@@ -140,22 +147,33 @@ int main(int argc, char* argv[]) {
             // send message to tcp
             char *p = (char *)&tcp_msg;
             for (int i = 3; i < nfds; i ++) {
-                int send = 0, remaining = sizeof(tcp_msg);
-                int current_send = 0;
-                while (remaining > 0) {
-                    current_send = write(pfds[i].fd, (p + send), remaining);
-                    remaining -= current_send;
-                    send += current_send;
+                // redirect message only to clients that are subscribed to the topic
+                for (int j = 0; j < clients[i - 3].subscribes_number; j ++) {
+                    if (strncmp(clients[i - 3].subscribes[j], tcp_msg.info.topic, 50) == 0) {
+                        int send = 0, remaining = sizeof(tcp_msg);
+                        int current_send = 0;
+                        while (remaining > 0) {
+                            current_send = write(pfds[i].fd, (p + send), remaining);
+                            remaining -= current_send;
+                            send += current_send;
+                        }
+                    }
                 }
+                // int send = 0, remaining = sizeof(tcp_msg);
+                // int current_send = 0;
+                // while (remaining > 0) {
+                //     current_send = write(pfds[i].fd, (p + send), remaining);
+                //     remaining -= current_send;
+                //     send += current_send;
+                // }
             }
 
         }
         else if((pfds[2].revents & POLLIN) != 0) {
             // handle new connection from tcp client
             // accept conenction
-            printf("TCP\n");
             connfd = accept(tcp_sockfd, (struct sockaddr *)&client_addr_tcp, (socklen_t *)&len_tcp);
-            printf("accept\n");
+            
             if (connfd < 0) {
                 fprintf(stderr, "accept failed\n");
                 return EXIT_FAILURE;
@@ -164,18 +182,100 @@ int main(int argc, char* argv[]) {
             pfds[nfds].events = POLLIN;
             nfds ++;
             used_nfds ++;
-            // TODO realloc
+            // check if there is space for new client
+            if (clients_number == INIT_PDFS) {
+                clients = realloc(clients, (clients_number + INIT_PDFS) * sizeof(struct client_info));
+            }
+
+            // create new client info
+            uint16_t aux_port = ntohs(client_addr_tcp.sin_port);
+            sprintf(clients[clients_number].port, "%hu", aux_port);
+            memcpy(clients[clients_number].ip_address, inet_ntoa(client_addr_udp.sin_addr), 16);
+            clients[clients_number].subscribes = malloc(INIT_PDFS * sizeof(char *));
+            clients[clients_number].subscribes_number = 0;
+
         } else {
             // handle message from tcp client
             for (int i = 3; i < nfds; i ++) {
                 if ((pfds[i].revents & POLLIN) != 0) {
                     bzero(buffer, MAXREC);
-                    read(pfds[i].fd, buffer, MAXREC);
-                    printf("From client: %s: ", buffer);     
-                    break;
+                    rc = read(pfds[i].fd, buffer, MAXREC);
+                    if (rc < 0) {
+                        fprintf(stderr, "read failed");
+                        return EXIT_FAILURE;
+                    }
+                    // check if received the end of the message
+                    int len = rc;
+                    while (len < sizeof(struct tcp_commands)) {
+                        rc = read(pfds[i].fd, buffer + len, MAXREC - len);
+                        len += rc;
+                    }
+
+                    struct tcp_commands *tcp_cmd = (struct tcp_commands *)buffer;
+                    if (tcp_cmd->command == 0) {
+                        // id
+                        // check if id exists
+                        for (int j = 0; j < clients_number; j ++) {
+                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
+                                fprintf(stderr, "Client %s already connected\n", tcp_cmd->text);
+                                // close client
+                                close(pfds[i].fd);
+                                // remove from pool
+                                for (int k = i; k < nfds - 1; k ++) {
+                                    pfds[k] = pfds[k + 1];
+                                }
+                                nfds --;
+                                used_nfds --;
+
+                                break;
+                            }
+                        }
+                        clients[clients_number].id = malloc(50);
+                        memcpy(clients[clients_number].id, tcp_cmd->text, 50);
+                        clients_number ++;
+                        // print command
+                        printf("New client %s connected from %s:%s\n", tcp_cmd->text, clients[clients_number - 1].ip_address, clients[clients_number - 1].port);
+                    } else if (tcp_cmd->command == 1) {
+                        // subscribe
+                        for (int j = 0; j < clients_number; j ++) {
+                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
+                                clients[j].subscribes = realloc(clients[j].subscribes, (clients[j].subscribes_number + 1) * sizeof(char *));
+                                clients[j].subscribes[clients[j].subscribes_number] = malloc(50);
+                                memcpy(clients[j].subscribes[clients[j].subscribes_number], tcp_cmd->text, 50);
+                                clients[j].subscribes_number ++;
+                            }
+                        }
+                    } else if (tcp_cmd->command == 2) {
+                        // unsubscribe
+                        for (int j = 0; j < clients_number; j ++) {
+                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
+                                for (int k = 0; k < clients[j].subscribes_number; k ++) {
+                                    if (strncmp(clients[j].subscribes[k], tcp_cmd->text, 50) == 0) {
+                                        free(clients[j].subscribes[k]);
+                                        clients[j].subscribes[k] = NULL;
+                                    }
+                                }
+                            }
+                        }
+                    } else if (tcp_cmd->command == 3) {
+                        // exit
+                        for (int j = 0; j < clients_number; j ++) {
+                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
+                                printf("Client %s disconnected.\n", tcp_cmd->text);
+                                for (int k = 0; k < clients[j].subscribes_number; k ++) {
+                                    free(clients[j].subscribes[k]);
+                                }
+                                free(clients[j].subscribes);
+                                free(clients[j].id);
+                                for (int k = j; k < clients_number - 1; k ++) {
+                                    clients[k] = clients[k + 1];
+                                }
+                                clients_number --;
+                            }
+                        }
+                    }
                 }
             }
-            
         }
     }
     

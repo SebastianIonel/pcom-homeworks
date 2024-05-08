@@ -29,6 +29,67 @@ int chat(int sockfd) {
 		if ((pfds[STDIN_FILENO].revents & POLLIN) != 0) {
 			// read from stdin
 			fgets(buffer, MAXREC, stdin);
+			// if subscribe command
+			if (strncmp(buffer, "subscribe", 9) == 0) {
+				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
+				bzero(cmd, sizeof(struct tcp_commands));
+				memcpy(cmd->start, "##", 2);
+				cmd->command = 1;
+				memcpy(cmd->text, buffer + 10, strlen(buffer) - 10);
+				memcpy(cmd->end, "##", 2);
+				rc = write(sockfd, cmd, sizeof(struct tcp_commands));
+				if (rc < 0) {
+					fprintf(stderr, "write failed");
+					return EXIT_FAILURE;
+				}
+				// give feedback
+				// printf("Subscribed to topic %s\n", buffer + 10);
+			}
+			else if (strncmp(buffer, "unsubscribe", 11) == 0) {
+				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
+				bzero(cmd, sizeof(struct tcp_commands));
+				memcpy(cmd->start, "##", 2);
+				cmd->command = 2;
+				memcpy(cmd->text, buffer + 12, strlen(buffer) - 12);
+				memcpy(cmd->end, "##", 2);
+				rc = write(sockfd, cmd, sizeof(struct tcp_commands));
+				if (rc < 0) {
+					fprintf(stderr, "write failed");
+					return EXIT_FAILURE;
+				}
+				// give feedback
+				// printf("Unsubscribed from topic %s\n", buffer + 12);
+			}
+			else if (strncmp(buffer, "exit", 4) == 0) {
+				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
+				bzero(cmd, sizeof(struct tcp_commands));
+				memcpy(cmd->start, "##", 2);
+				cmd->command = 3;
+				memcpy(cmd->text, "exit", 4);
+				memcpy(cmd->end, "##", 2);
+				rc = write(sockfd, cmd, sizeof(struct tcp_commands));
+				if (rc < 0) {
+					fprintf(stderr, "write failed");
+					return EXIT_FAILURE;
+				}
+			}
+			else if (strncmp(buffer, "exit", 4) == 0) {
+				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
+				bzero(cmd, sizeof(struct tcp_commands));
+				memcpy(cmd->start, "##", 2);
+				cmd->command = 3;
+				memcpy(cmd->text, "exit", 4);
+				memcpy(cmd->end, "##", 2);
+				rc = write(sockfd, cmd, sizeof(struct tcp_commands));
+				if (rc < 0) {
+					fprintf(stderr, "write failed");
+					return EXIT_FAILURE;
+				}
+			}
+			else {
+				fprintf(stderr, "Invalid command\n");
+			}
+			
 			// send to server
 			rc = write(sockfd, buffer, MAXREC);
 			if (rc < 0) {
@@ -144,6 +205,20 @@ int main(int argc, char *argv[]) {
 		return EXIT_FAILURE;
 	}
 
+	// send id to server
+	struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
+	bzero(cmd, sizeof(struct tcp_commands));
+	memcpy(cmd->start, "##", 2);
+	cmd->command = 0;
+	memcpy(cmd->text, id, strlen(id));
+	memcpy(cmd->end, "##", 2);
+	rc = write(sockfd, cmd, sizeof(struct tcp_commands));
+	if (rc < 0) {
+		fprintf(stderr, "write failed\n");
+		return EXIT_FAILURE;
+	}
+	
+	
 	// chat
 	rc = chat(sockfd);
 	if (rc != 0) {
