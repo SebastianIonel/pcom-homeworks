@@ -3,9 +3,10 @@
 void print_info(struct tcp_message *msg) {
 	// printf("%s -- TYPE: %u\n", msg->info.topic, msg->info.type);
 	// <IP_CLIENT_UDP>:<PORT_CLIENT_UDP> - <TOPIC> - <TIP_DATE> - <VALOARE_MESAJ>
-	printf("%s:%s - %s - %d - ", msg->info.ip_address, msg->info.port, msg->info.topic, msg->info.type);
-
-	// print content based on type
+	// type = 0 == INT
+	// type = 1 == SHORT_REAL
+	// type = 2 == FLOAT
+	// type = 3 == STRING
 	if (msg->info.type == 0) {
 		uint8_t sign;
 		uint32_t value;
@@ -15,14 +16,15 @@ void print_info(struct tcp_message *msg) {
 		if (sign == 1) {
 			value = -value;
 		}
-		printf("%d\n", value);
+		printf("%s - INT - %d\n", msg->info.topic, value);
 	}
+
 	if (msg->info.type == 1) {
 		uint16_t value;
 		memcpy(&value, msg->info.content, 2);
 		value = ntohs(value);
 		double num = (double) value / 100;
-		printf("%.2f\n", num);
+		printf("%s - SHORT_REAL - %.2f\n", msg->info.topic, num);
 	}
 
 	if (msg->info.type == 2) {
@@ -36,15 +38,52 @@ void print_info(struct tcp_message *msg) {
 		double num = (double) value / pow(10, power);
 		if (sign == 1)
 			num = -num;
-		printf("%.*f\n", power, num);
+		printf("%s - FLOAT - %.*f\n", msg->info.topic, power, num);
 	}
 
 	if (msg->info.type == 3) {
-		printf("%s\n", msg->info.content);
+		printf("%s - STRING - %s\n", msg->info.topic, msg->info.content);
 	}
 
+	// printf("%s - %s - ", msg->info.topic, msg->info.type);
 
+	// // print content based on type
+	// if (msg->info.type == 0) {
+	// 	uint8_t sign;
+	// 	uint32_t value;
+	// 	memcpy(&sign, msg->info.content, 1);
+	// 	memcpy(&value, msg->info.content + 1, 4);
+	// 	value = ntohl(value);
+	// 	if (sign == 1) {
+	// 		value = -value;
+	// 	}
+	// 	printf("%d\n", value);
+	// }
+	// if (msg->info.type == 1) {
+	// 	uint16_t value;
+	// 	memcpy(&value, msg->info.content, 2);
+	// 	value = ntohs(value);
+	// 	double num = (double) value / 100;
+	// 	printf("%.2f\n", num);
+	// }
 
+	// if (msg->info.type == 2) {
+	// 	uint8_t power;
+	// 	uint8_t sign;
+	// 	uint32_t value;
+	// 	memcpy(&sign, msg->info.content, 1);
+	// 	memcpy(&value, msg->info.content + 1, 4);
+	// 	memcpy(&power, msg->info.content + 5, 1);
+	// 	value = ntohl(value);
+	// 	double num = (double) value / pow(10, power);
+	// 	if (sign == 1)
+	// 		num = -num;
+	// 	printf("%.*f\n", power, num);
+	// }
+
+	// if (msg->info.type == 3) {
+	// 	printf("%s\n", msg->info.content);
+	// }
 }
 
 int chat(int sockfd) {
