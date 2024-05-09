@@ -9,7 +9,8 @@
 #include <sys/poll.h>
 #include <arpa/inet.h>
 #include <unistd.h> 
-
+#include <math.h>
+#include <errno.h>
 
 #define TYPE 50
 #define INIT_PDFS 500
@@ -48,6 +49,6 @@ struct client_info {
 	char *id;
 	char **subscribes;
 	int subscribes_number;
-	char ip_address[16];
+	char *ip_address;
 	char port[6];
 };

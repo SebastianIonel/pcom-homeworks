@@ -146,10 +146,15 @@ int main(int argc, char* argv[]) {
             
             // send message to tcp
             char *p = (char *)&tcp_msg;
+            // printf("Message received from %s:%hu -- %d\n", tcp_msg.info.ip_address, aux_port, nfds);
             for (int i = 3; i < nfds; i ++) {
                 // redirect message only to clients that are subscribed to the topic
+                // printf("Client %d, id: %s\n", i - 3, clients[i - 3].id);
+                // printf("Search topic: %s in %d \n", tcp_msg.info.topic, clients[i - 3].subscribes_number);
                 for (int j = 0; j < clients[i - 3].subscribes_number; j ++) {
-                    if (strncmp(clients[i - 3].subscribes[j], tcp_msg.info.topic, 50) == 0) {
+                    // printf("Subscribed to: %s\n", clients[i - 3].subscribes[j]);
+                    if (strncmp(clients[i - 3].subscribes[j], tcp_msg.info.topic, strlen(tcp_msg.info.topic)) == 0) {
+                        // printf("Send to %d\n", i);
                         int send = 0, remaining = sizeof(tcp_msg);
                         int current_send = 0;
                         while (remaining > 0) {
@@ -159,13 +164,6 @@ int main(int argc, char* argv[]) {
                         }
                     }
                 }
-                // int send = 0, remaining = sizeof(tcp_msg);
-                // int current_send = 0;
-                // while (remaining > 0) {
-                //     current_send = write(pfds[i].fd, (p + send), remaining);
-                //     remaining -= current_send;
-                //     send += current_send;
-                // }
             }
 
         }
@@ -190,28 +188,25 @@ int main(int argc, char* argv[]) {
             // create new client info
             uint16_t aux_port = ntohs(client_addr_tcp.sin_port);
             sprintf(clients[clients_number].port, "%hu", aux_port);
-            memcpy(clients[clients_number].ip_address, inet_ntoa(client_addr_udp.sin_addr), 16);
+            // printf("New client(%d) connected from %s:%s\n", clients_number, inet_ntoa(client_addr_tcp.sin_addr), clients[clients_number].port);
+            clients[clients_number].ip_address = inet_ntoa(client_addr_tcp.sin_addr);
             clients[clients_number].subscribes = malloc(INIT_PDFS * sizeof(char *));
             clients[clients_number].subscribes_number = 0;
+            // printf("Client %d, ip: %s, port: %s\n", clients_number, clients[clients_number].ip_address, clients[clients_number].port);
 
         } else {
             // handle message from tcp client
             for (int i = 3; i < nfds; i ++) {
                 if ((pfds[i].revents & POLLIN) != 0) {
-                    bzero(buffer, MAXREC);
-                    rc = read(pfds[i].fd, buffer, MAXREC);
+                    // bzero(buffer, MAXREC);
+                    char read_buffer[sizeof(struct tcp_commands)];
+                    rc = read(pfds[i].fd, read_buffer, sizeof(struct tcp_commands));
                     if (rc < 0) {
                         fprintf(stderr, "read failed");
                         return EXIT_FAILURE;
                     }
-                    // check if received the end of the message
-                    int len = rc;
-                    while (len < sizeof(struct tcp_commands)) {
-                        rc = read(pfds[i].fd, buffer + len, MAXREC - len);
-                        len += rc;
-                    }
 
-                    struct tcp_commands *tcp_cmd = (struct tcp_commands *)buffer;
+                    struct tcp_commands *tcp_cmd = (struct tcp_commands *)read_buffer;
                     if (tcp_cmd->command == 0) {
                         // id
                         // check if id exists
@@ -237,24 +232,30 @@ int main(int argc, char* argv[]) {
                         printf("New client %s connected from %s:%s\n", tcp_cmd->text, clients[clients_number - 1].ip_address, clients[clients_number - 1].port);
                     } else if (tcp_cmd->command == 1) {
                         // subscribe
-                        for (int j = 0; j < clients_number; j ++) {
-                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
-                                clients[j].subscribes = realloc(clients[j].subscribes, (clients[j].subscribes_number + 1) * sizeof(char *));
-                                clients[j].subscribes[clients[j].subscribes_number] = malloc(50);
-                                memcpy(clients[j].subscribes[clients[j].subscribes_number], tcp_cmd->text, 50);
-                                clients[j].subscribes_number ++;
+                        // check if topic is already subscribed
+                        int subscribed = 0;
+
+                        for (int j = 0; j < clients[i - 3].subscribes_number; j ++) {
+                            if (strncmp(clients[i - 3].subscribes[j], tcp_cmd->text, 50) == 0) {
+                                subscribed = 1;
+                                break;
                             }
                         }
+                        if (subscribed == 0) {
+                            clients[i - 3].subscribes[clients[i - 3].subscribes_number] = malloc(50);
+                            memcpy(clients[i - 3].subscribes[clients[i - 3].subscribes_number], tcp_cmd->text, 50);
+                            clients[i - 3].subscribes_number ++;
+                        }
+
                     } else if (tcp_cmd->command == 2) {
                         // unsubscribe
-                        for (int j = 0; j < clients_number; j ++) {
-                            if (strncmp(clients[j].id, tcp_cmd->text, 50) == 0) {
-                                for (int k = 0; k < clients[j].subscribes_number; k ++) {
-                                    if (strncmp(clients[j].subscribes[k], tcp_cmd->text, 50) == 0) {
-                                        free(clients[j].subscribes[k]);
-                                        clients[j].subscribes[k] = NULL;
-                                    }
+                        for (int j = 0; j < clients[i - 3].subscribes_number; j ++) {
+                            if (strncmp(clients[i - 3].subscribes[j], tcp_cmd->text, 50) == 0) {
+                                free(clients[i - 3].subscribes[j]);
+                                for (int k = j; k < clients[i - 3].subscribes_number - 1; k ++) {
+                                    clients[i - 3].subscribes[k] = clients[i - 3].subscribes[k + 1];
                                 }
+                                clients[i - 3].subscribes_number --;
                             }
                         }
                     } else if (tcp_cmd->command == 3) {
@@ -274,6 +275,11 @@ int main(int argc, char* argv[]) {
                             }
                         }
                     }
+                    // print tcp_cmd
+                    // printf("Command: %d\n", tcp_cmd->command);
+                    // printf("Text: %s\n", tcp_cmd->text);
+
+                    
                 }
             }
         }

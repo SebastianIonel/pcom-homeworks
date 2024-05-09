@@ -1,7 +1,50 @@
 #include "protocol.h"
 
 void print_info(struct tcp_message *msg) {
-	printf("%s -- TYPE: %u\n", msg->info.topic, msg->info.type);
+	// printf("%s -- TYPE: %u\n", msg->info.topic, msg->info.type);
+	// <IP_CLIENT_UDP>:<PORT_CLIENT_UDP> - <TOPIC> - <TIP_DATE> - <VALOARE_MESAJ>
+	printf("%s:%s - %s - %d - ", msg->info.ip_address, msg->info.port, msg->info.topic, msg->info.type);
+
+	// print content based on type
+	if (msg->info.type == 0) {
+		uint8_t sign;
+		uint32_t value;
+		memcpy(&sign, msg->info.content, 1);
+		memcpy(&value, msg->info.content + 1, 4);
+		value = ntohl(value);
+		if (sign == 1) {
+			value = -value;
+		}
+		printf("%d\n", value);
+	}
+	if (msg->info.type == 1) {
+		uint16_t value;
+		memcpy(&value, msg->info.content, 2);
+		value = ntohs(value);
+		double num = (double) value / 100;
+		printf("%.2f\n", num);
+	}
+
+	if (msg->info.type == 2) {
+		uint8_t power;
+		uint8_t sign;
+		uint32_t value;
+		memcpy(&sign, msg->info.content, 1);
+		memcpy(&value, msg->info.content + 1, 4);
+		memcpy(&power, msg->info.content + 5, 1);
+		value = ntohl(value);
+		double num = (double) value / pow(10, power);
+		if (sign == 1)
+			num = -num;
+		printf("%.*f\n", power, num);
+	}
+
+	if (msg->info.type == 3) {
+		printf("%s\n", msg->info.content);
+	}
+
+
+
 }
 
 int chat(int sockfd) {
@@ -43,7 +86,8 @@ int chat(int sockfd) {
 					return EXIT_FAILURE;
 				}
 				// give feedback
-				// printf("Subscribed to topic %s\n", buffer + 10);
+				printf("Subscribed to topic %s", buffer + 10);
+				free(cmd);
 			}
 			else if (strncmp(buffer, "unsubscribe", 11) == 0) {
 				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
@@ -58,7 +102,8 @@ int chat(int sockfd) {
 					return EXIT_FAILURE;
 				}
 				// give feedback
-				// printf("Unsubscribed from topic %s\n", buffer + 12);
+				printf("Unsubscribed from topic %s", buffer + 12);
+				free(cmd);
 			}
 			else if (strncmp(buffer, "exit", 4) == 0) {
 				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
@@ -72,29 +117,10 @@ int chat(int sockfd) {
 					fprintf(stderr, "write failed");
 					return EXIT_FAILURE;
 				}
-			}
-			else if (strncmp(buffer, "exit", 4) == 0) {
-				struct tcp_commands *cmd = malloc(sizeof(struct tcp_commands));
-				bzero(cmd, sizeof(struct tcp_commands));
-				memcpy(cmd->start, "##", 2);
-				cmd->command = 3;
-				memcpy(cmd->text, "exit", 4);
-				memcpy(cmd->end, "##", 2);
-				rc = write(sockfd, cmd, sizeof(struct tcp_commands));
-				if (rc < 0) {
-					fprintf(stderr, "write failed");
-					return EXIT_FAILURE;
-				}
+				free(cmd);
 			}
 			else {
-				fprintf(stderr, "Invalid command\n");
-			}
-			
-			// send to server
-			rc = write(sockfd, buffer, MAXREC);
-			if (rc < 0) {
-				fprintf(stderr, "write failed");
-				return EXIT_FAILURE;
+				fprintf(stderr, "Invalid command");
 			}
 			
 			// clear buffer
@@ -103,6 +129,7 @@ int chat(int sockfd) {
 		else if((pfds[1].revents & POLLIN) != 0) {
 			// recieved from server
 			// should be in a while and assemble
+			
 			struct tcp_message *tcp_msg = NULL;
 			char message[MAXREC], aux[MAXREC], *msg_point = message;
 			int end = 0;
@@ -116,8 +143,7 @@ int chat(int sockfd) {
 				}
 				len += rc;
 				memcpy(msg_point, buffer, rc);
-				msg_point = msg_point + rc;				
-				// printf("LENGTH: %d\n", len);
+				msg_point = msg_point + rc;			
 				
 				while (1) {
 					start = 0;
@@ -130,6 +156,7 @@ int chat(int sockfd) {
 						end = 1;
 					}
 					// printf("%d - ", buffer[i]);
+					
 				}
 					if (start == 1 && end == 1) {
 						tcp_msg = (struct tcp_message *)message;
@@ -166,7 +193,7 @@ int chat(int sockfd) {
 // argv[3] == PORT
 int main(int argc, char *argv[]) {
 	if (argc != 4) {
-        fprintf(stderr, "Usage: %s <id_client> <ip_server> <port>\n", argv[0]);
+        fprintf(stderr, "Usage: %s <id_client> <ip_server> <port>", argv[0]);
         return EXIT_FAILURE;
 	}
 	setvbuf(stdout, NULL, _IONBF, BUFSIZ);
