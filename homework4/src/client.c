@@ -68,12 +68,14 @@ int main() {
 		}
 		else if (strncmp(command, "get_books", 9) == 0) {
 			// TODO: implement get_books
+			print_books(sockfd, cookies, cookies_count, auth_token);
 		}
 		else if (strncmp(command, "get_book", 8) == 0) {
 			// TODO: implement get_book
 		}
 		else if (strncmp(command, "add_book", 8) == 0) {
 			// TODO: implement add_book
+
 		}
 		else if (strncmp(command, "delete_book", 11) == 0) {
 			// TODO: implement delete_book
