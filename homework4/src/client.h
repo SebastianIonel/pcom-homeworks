@@ -6,6 +6,7 @@
 #include <netinet/in.h> /* struct sockaddr_in, struct sockaddr */
 #include <netdb.h>      /* struct hostent, gethostbyname */
 #include <arpa/inet.h>
+#include <errno.h>
 
 #define COMMAND_LEN 20
 #define MAX_INPUT 100

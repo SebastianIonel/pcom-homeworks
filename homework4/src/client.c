@@ -21,6 +21,20 @@ int main() {
 		}
 		else if (strncmp(command, "logout", 6) == 0) {
 			// TODO: implement logout
+			int ok = logout(sockfd, cookies, cookies_count, auth_token);
+			if (ok < 0) {
+				printf("LOGOUT FAILED. ERROR\n");
+			} else {
+				// free cookies
+				for (int i = 0; i < cookies_count; i++) {
+					free(cookies[i]);
+				}
+				cookies_count = 0;
+				// free auth_token
+				free(auth_token);
+				auth_token = NULL;
+				printf("LOGOUT SUCCESS\n");
+			}
 		}
 		else if (strncmp(command, "register", 8) == 0) {
 			// TODO: implement register
@@ -72,13 +86,63 @@ int main() {
 		}
 		else if (strncmp(command, "get_book", 8) == 0) {
 			// TODO: implement get_book
+			char id[10];
+			printf("id=");
+			fflush(stdout);
+			fgets(id, 10, stdin);
+			get_book(sockfd, cookies, cookies_count, auth_token, id);
 		}
 		else if (strncmp(command, "add_book", 8) == 0) {
 			// TODO: implement add_book
-
+			char title[MAX_INPUT];
+			char author[MAX_INPUT];
+			char genre[MAX_INPUT];
+			char publisher[MAX_INPUT];
+			char page_count[10];
+			
+			printf("title=");
+			fflush(stdout);
+			fgets(title, MAX_INPUT, stdin);
+			printf("author=");
+			fflush(stdout);
+			fgets(author, MAX_INPUT, stdin);
+			printf("genre=");
+			fflush(stdout);
+			fgets(genre, MAX_INPUT, stdin);
+			printf("publisher=");
+			fflush(stdout);
+			fgets(publisher, MAX_INPUT, stdin);
+			printf("page_count=");
+			fflush(stdout);
+			fgets(page_count, 10, stdin);
+			
+			// check corectness of page_count
+			errno = 0;
+			strtol(page_count, NULL, 10);
+			if (errno != 0) {
+				printf("FAILED: Invalid page_count\n");
+				continue;
+			}
+			int ok = add_book(sockfd, cookies, cookies_count, auth_token, title, author, genre, publisher, page_count);
+			if (ok < 0) {
+				printf("ADD BOOK FAILED. ERROR\n");
+			} else {
+				printf("ADD BOOK SUCCESS\n");
+			}
+			
 		}
 		else if (strncmp(command, "delete_book", 11) == 0) {
 			// TODO: implement delete_book
+			char id[10];
+			printf("id=");
+			fflush(stdout);
+			fgets(id, 10, stdin);
+			int ok = delete_book(sockfd, cookies, cookies_count, auth_token, id);
+			if (ok < 0) {
+				printf("DELETE BOOK FAILED. ERROR\n");
+			} else {
+				printf("DELETE BOOK SUCCESS\n");
+			}			
 		} else {
 			printf("Invalid command\n");
 		}

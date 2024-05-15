@@ -17,3 +17,11 @@ void print_books(int sockfd, char **cookies, int cookies_count, char *auth_token
 
 int add_book(int sockfd, char **cookies, int cookies_count, char *auth_token, char *title,
 	char *author, char *genre, char *publisher, char *page_count);
+
+void get_book(int sockfd, char **cookies, int cookies_count, char *auth_token, char *id);
+
+char *delete_request(int sockfd, char *url, char *content_type, char **cookies, int cookies_count, char *auth_token);
+
+int delete_book(int sockfd, char **cookies, int cookies_count, char *auth_token, char *id);
+
+int logout(int sockfd, char **cookies, int cookies_count, char *auth_token);

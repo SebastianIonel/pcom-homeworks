@@ -106,7 +106,7 @@ void send_to_server(int sockfd, char *message)
 
 char *post_request(int sockfd, char *url, char *content_type, char *body_data, 
         char **cookies, int cookies_count, char *auth_token) {
-    char *message = calloc(5 * MAX_INPUT, sizeof(char));
+    char *message = calloc(BUFLEN, sizeof(char));
     strcat(message, "POST ");
     char *content;
     char *content_length;
@@ -162,7 +162,7 @@ char *post_request(int sockfd, char *url, char *content_type, char *body_data,
     return response;
 }
 
-char *get_request(int sockfd, char *url, char **cookies, int cookies_cout, char *auth_token) {
+char *get_request(int sockfd, char *url, char **cookies, int cookies_count, char *auth_token) {
 
     char *the_cookies;
     char *message = calloc(500, sizeof(char));
@@ -170,11 +170,11 @@ char *get_request(int sockfd, char *url, char **cookies, int cookies_cout, char 
     compute_message(message, url);
     compute_message(message, "Host: " HOST);
     if (cookies != NULL) {
-        the_cookies = calloc(cookies_cout * BUFLEN, sizeof(char));
+        the_cookies = calloc(cookies_count * BUFLEN, sizeof(char));
         strcat(the_cookies, "Cookie: ");
-        for (int i = 0; i < cookies_cout; i ++) {
+        for (int i = 0; i < cookies_count; i ++) {
             strcat(the_cookies, cookies[i]);
-            if (i != cookies_cout - 1) {
+            if (i != cookies_count - 1) {
                 strcat(the_cookies, "; ");
             }
         }
@@ -191,7 +191,7 @@ char *get_request(int sockfd, char *url, char **cookies, int cookies_cout, char 
 
     compute_message(message, "");
 
-    printf("%s\n", message);
+    // printf("%s\n", message);
     
     send_to_server(sockfd, message);
     
@@ -262,7 +262,7 @@ char *enter_library(int sockfd, char **cookies, int cookies_count) {
     char *body_data = NULL;
 
     char *response = get_request(sockfd, url, cookies, cookies_count, NULL);
-    printf("Response(%ld) %s\n", strlen(response),response);
+    // printf("Response(%ld) %s\n", strlen(response),response);
     
     if (strstr(response, "200 OK") != NULL) {
         // return token
@@ -284,7 +284,7 @@ char *enter_library(int sockfd, char **cookies, int cookies_count) {
 void print_books(int sockfd, char **cookies, int cookies_count, char *auth_token) {
     char *url = "/api/v1/tema/library/books HTTP/1.1";
     char *response = get_request(sockfd, url, cookies, cookies_count, auth_token);
-    printf("Response: %s\n", response);
+    // printf("Response: %s\n", response);
     if (strstr(response, "200 OK") != NULL) {
         char *aux = strstr(response, "[");
         char *book = calloc(BUFLEN, sizeof(char));
@@ -299,7 +299,7 @@ void print_books(int sockfd, char **cookies, int cookies_count, char *auth_token
         printf("SUCCESS: %s\n", book);
         free(book);
     } else {
-        printf("Error\n");
+        printf("ERROR\n");
     }
     
 }
@@ -309,5 +309,131 @@ int add_book(int sockfd, char **cookies, int cookies_count, char *auth_token, ch
         char *author, char *genre, char *publisher, char *page_count) {
     char *url = "/api/v1/tema/library/books HTTP/1.1";
     char *content_type = "application/json";
+    char *body_data = calloc(LINELEN, sizeof(char));
+    
+    // clear new line
+    title[strlen(title) - 1] = '\0';
+    author[strlen(author) - 1] = '\0';
+    genre[strlen(genre) - 1] = '\0';
+    publisher[strlen(publisher) - 1] = '\0';
+    page_count[strlen(page_count) - 1] = '\0';
 
+    // create body data
+    sprintf(body_data, "{\"title\":\"%s\",\"author\":\"%s\",\"genre\":\"%s\",\"publisher\":\"%s\",\"page_count\":\"%s\"}", title, author, genre, publisher, page_count);
+
+    char *response = post_request(sockfd, url, content_type, body_data, cookies, cookies_count, auth_token);
+    // printf("Response(%ld): %s\n", strlen(response) ,response);
+
+    // free memory
+    free(body_data);
+
+    if (strstr(response, "200 OK") != NULL) {
+        return 1;
+    } else {
+        return -1;
+    }
+}
+
+void get_book(int sockfd, char **cookies, int cookies_count, char *auth_token, char *id) {
+    char *url = calloc(LINELEN, sizeof(char));
+
+    // clear new line
+    id[strlen(id) - 1] = '\0';
+
+    sprintf(url, "/api/v1/tema/library/books/%s HTTP/1.1", id);
+
+    char *response = get_request(sockfd, url, cookies, cookies_count, auth_token);
+
+    if (strstr(response, "200 OK") != NULL) {
+        char *aux = strstr(response, "{");
+        char *book = calloc(BUFLEN, sizeof(char));
+        int i = 0;
+        while (aux[i] != '}') {
+            i ++;
+        }
+        i ++;
+        aux[i] = '\0';
+
+        memcpy(book, aux, strlen(aux) + 1);
+        printf("SUCCESS: %s\n", book);
+        free(book);
+        free(url);
+    } else {
+        printf("ERROR\n");
+    }    
+
+}
+
+
+char *delete_request(int sockfd, char *url, char *content_type, char **cookies, int cookies_count, char *auth_token) {
+char *the_cookies;
+    char *message = calloc(500, sizeof(char));
+    strcat(message, "DELETE ");
+    compute_message(message, url);
+    compute_message(message, "Host: " HOST);
+    if (cookies != NULL) {
+        the_cookies = calloc(cookies_count * BUFLEN, sizeof(char));
+        strcat(the_cookies, "Cookie: ");
+        for (int i = 0; i < cookies_count; i ++) {
+            strcat(the_cookies, cookies[i]);
+            if (i != cookies_count - 1) {
+                strcat(the_cookies, "; ");
+            }
+        }
+        compute_message(message, the_cookies);
+    }
+    
+    if (auth_token  != NULL) {
+        char *auth = calloc(BUFLEN, sizeof(char));
+        strcat(auth, "Authorization: Bearer ");
+        strcat(auth, auth_token);
+        compute_message(message, auth);
+        free(auth);
+    }
+
+    compute_message(message, "");
+
+    // printf("%s\n", message);
+    
+    send_to_server(sockfd, message);
+    
+    free(message);
+
+    // printf("Received response\n");
+    char *response;
+    response = receive_from_server(sockfd);
+    return response;
+
+}
+
+int delete_book(int sockfd, char **cookies, int cookies_count, char *auth_token, char *id) {
+    char *url = calloc(LINELEN, sizeof(char));
+
+    // clear new line
+    id[strlen(id) - 1] = '\0';
+
+    sprintf(url, "/api/v1/tema/library/books/%s HTTP/1.1", id);
+
+    char *response = get_request(sockfd, url, cookies, cookies_count, auth_token);
+
+    free(url);
+
+    if (strstr(response, "200 OK") != NULL) {
+        return 1;
+    } else {
+        return -1;
+    }    
+
+}
+
+int logout(int sockfd, char **cookies, int cookies_count, char *auth_token) {
+    char *url = "/api/v1/tema/auth/logout HTTP/1.1";
+
+    char *response = get_request(sockfd, url, cookies, cookies_count, auth_token);
+    // printf("Response: %s\n", response);
+    if (strstr(response, "200 OK") != NULL) {
+        return 1;
+    } else {
+        return -1;
+    }
 }
